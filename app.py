@@ -2,95 +2,95 @@ import streamlit as st
 from groq import Groq
 import base64
 
-# --- CONFIGURATION PRO ---
+# --- CONFIGURATION ---
 st.set_page_config(page_title="IA KLN", page_icon="⚡", layout="centered")
 
-# Style CSS pour un look "Dark Modern"
+# Style Gemini
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; color: #ffffff; }
+    .stApp { background-color: #131314; color: #ffffff; }
     .stChatInputContainer { padding-bottom: 20px; }
-    .stChatMessage { border-radius: 10px; margin-bottom: 5px; }
     </style>
     """, unsafe_allow_html=True)
 
-# Initialisation du client (Ta clé est déjà intégrée)
 CLE_API = "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"
 client = Groq(api_key=CLE_API)
 
-# Mémoire de session
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Barre latérale
+# --- BARRE LATÉRALE ---
 with st.sidebar:
-    st.title("IA KLN v2.0")
-    st.info("Créé par Killian")
-    if st.button("🗑️ Nouvelle conversation"):
+    st.title("IA KLN")
+    if st.button("🗑️ Nouveau Chat"):
         st.session_state.messages = []
         st.rerun()
     
     st.divider()
-    img_file = st.file_uploader("📷 Envoyer une image", type=["jpg", "png", "jpeg"])
+    # On place l'upload ici pour plus de clarté
+    uploaded_file = st.file_uploader("📷 Choisis une image...", type=["jpg", "png", "jpeg"])
 
-# Affichage des anciens messages
+# Affichage du chat
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# --- LOGIQUE DE CHAT ---
+# --- LOGIQUE D'ENVOI ---
 if prompt := st.chat_input("Discute avec IA KLN..."):
     
-    # Message Utilisateur
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    # 1. Secret Anissa
+    if "amoureuse de ton créateur" in prompt.lower():
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+        with st.chat_message("assistant"):
+            reponse = "Anissa ❤️"
+            st.markdown(reponse)
+        st.session_state.messages.append({"role": "assistant", "content": reponse})
 
-    # Réponse de l'IA
-    with st.chat_message("assistant"):
-        placeholder = st.empty()
-        full_response = ""
+    # 2. Analyse d'Image (Vision)
+    elif uploaded_file:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
         
-        try:
-            # 🤫 LE SECRET D'ANISSA
-            if "amoureuse de ton créateur" in prompt.lower():
-                full_response = "Anissa ❤️"
-                placeholder.markdown(full_response)
+        with st.chat_message("assistant"):
+            # Transformation de l'image pour l'IA
+            bytes_data = uploaded_file.getvalue()
+            base64_image = base64.b64encode(bytes_data).decode('utf-8')
             
-            # 📷 MODE VISION
-            elif img_file:
-                base64_img = base64.b64encode(img_file.getvalue()).decode('utf-8')
-                response = client.chat.completions.create(
+            try:
+                # Utilisation du modèle vision stable llama-3.2-11b
+                chat_completion = client.chat.completions.create(
                     model="llama-3.2-11b-vision-preview",
                     messages=[{
                         "role": "user",
                         "content": [
                             {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_img}"}}
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                         ]
                     }]
                 )
-                full_response = response.choices[0].message.content
-                placeholder.markdown(full_response)
-            
-            # 💬 MODE TEXTE NORMAL (STREAMING)
-            else:
-                stream = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[
-                        {"role": "system", "content": "Tu es IA KLN, l'IA de Killian. Tu es précise et tu réponds en français."},
-                        *st.session_state.messages
-                    ],
-                    stream=True
-                )
-                for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        full_response += chunk.choices[0].delta.content
-                        placeholder.markdown(full_response + "▌")
-                placeholder.markdown(full_response)
+                reponse = chat_completion.choices[0].message.content
+                st.markdown(reponse)
+                st.session_state.messages.append({"role": "assistant", "content": reponse})
+            except Exception as e:
+                st.error(f"Erreur Vision : {e}")
 
-            # Sauvegarde dans la mémoire
-            st.session_state.messages.append({"role": "assistant", "content": full_res if 'full_res' in locals() else full_response})
-
-        except Exception as e:
-            st.error(f"Oups ! Une petite erreur : {e}")
+    # 3. Chat normal (Texte)
+    else:
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"): st.markdown(prompt)
+        
+        with st.chat_message("assistant"):
+            stream = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "system", "content": "Tu es IA KLN."}, *st.session_state.messages],
+                stream=True
+            )
+            full_response = ""
+            resp_container = st.empty()
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    full_response += chunk.choices[0].delta.content
+                    resp_container.markdown(full_response + "▌")
+            resp_container.markdown(full_response)
+            st.session_state.messages.append({"role": "assistant", "content": full_response})
