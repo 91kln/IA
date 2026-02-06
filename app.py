@@ -1,29 +1,45 @@
 import streamlit as st
 from groq import Groq
 import base64
+import json
+import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="IA KLN", page_icon="⚡", layout="centered")
+st.set_page_config(page_title="IA KLN - Mémoire", page_icon="🧠", layout="centered")
 
 st.markdown("""
     <style>
     .stApp { background-color: #131314; color: #ffffff; }
-    .stChatInputContainer { padding-bottom: 20px; }
     </style>
     """, unsafe_allow_html=True)
 
-# Ta clé API
 CLE_API = "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"
 client = Groq(api_key=CLE_API)
+FICHIER_MEMOIRE = "memoire_ia.json"
 
+# --- FONCTIONS DE MÉMOIRE ---
+def charger_memoire():
+    if os.path.exists(FICHIER_MEMOIRE):
+        with open(FICHIER_MEMOIRE, "r") as f:
+            return json.load(f)
+    return []
+
+def sauvegarder_memoire(messages):
+    with open(FICHIER_MEMOIRE, "w") as f:
+        json.dump(messages, f)
+
+# Initialisation de la session avec le fichier
 if "messages" not in st.session_state:
-    st.session_state.messages = []
+    st.session_state.messages = charger_memoire()
 
 # --- BARRE LATÉRALE ---
 with st.sidebar:
-    st.title("IA KLN")
-    if st.button("🗑️ Effacer la discussion"):
+    st.title("IA KLN 🧠")
+    st.info("Mode Mémoire Longue activé. Vos discussions sont sauvegardées.")
+    if st.button("🗑️ Réinitialiser la mémoire"):
         st.session_state.messages = []
+        if os.path.exists(FICHIER_MEMOIRE):
+            os.remove(FICHIER_MEMOIRE)
         st.rerun()
 
 # --- AFFICHAGE DU CHAT ---
@@ -33,63 +49,57 @@ for msg in st.session_state.messages:
 
 # --- ZONE IMAGE ---
 st.divider()
-uploaded_file = st.file_uploader("➕ Ajoute une photo ici", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
-
+uploaded_file = st.file_uploader("➕ Ajouter une photo", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
 if uploaded_file:
-    st.image(uploaded_file, caption="Image prête à l'analyse", width=300)
+    st.image(uploaded_file, width=250)
 
 # --- LOGIQUE D'ENVOI ---
-if prompt := st.chat_input("Pose ta question sur l'image ou autre..."):
-    
+if prompt := st.chat_input("Dis-moi quelque chose..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 🤫 Secret Anissa
-    if "amoureuse de ton créateur" in prompt.lower():
-        with st.chat_message("assistant"):
-            reponse = "Anissa ❤️"
-            st.markdown(reponse)
-        st.session_state.messages.append({"role": "assistant", "content": reponse})
+    reponse_finale = ""
 
-    # 📷 ANALYSE IMAGE (Modèle Llama 4 Scout)
-    elif uploaded_file is not None:
-        with st.chat_message("assistant"):
-            with st.spinner("IA KLN analyse l'image avec Llama 4..."):
+    with st.chat_message("assistant"):
+        # Cas Secret Anissa
+        if "amoureuse de ton créateur" in prompt.lower():
+            reponse_finale = "Anissa ❤️"
+            st.markdown(reponse_finale)
+        
+        # Cas Vision
+        elif uploaded_file is not None:
+            with st.spinner("IA KLN analyse l'image..."):
                 try:
                     bytes_data = uploaded_file.getvalue()
                     base64_image = base64.b64encode(bytes_data).decode('utf-8')
-                    
-                    # CHANGEMENT ICI : Nouveau modèle llama-4-scout
                     response = client.chat.completions.create(
                         model="meta-llama/llama-4-scout-17b-16e-instruct",
-                        messages=[{
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                            ]
-                        }]
+                        messages=[{"role": "user", "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]}]
                     )
-                    reponse_ia = response.choices[0].message.content
-                    st.markdown(reponse_ia)
-                    st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
+                    reponse_finale = response.choices[0].message.content
+                    st.markdown(reponse_finale)
                 except Exception as e:
-                    st.error(f"Désolé Killian, j'ai une erreur de vision : {e}")
-
-    # 💬 CHAT TEXTE NORMAL
-    else:
-        with st.chat_message("assistant"):
+                    st.error(f"Erreur Vision : {e}")
+        
+        # Cas Texte Normal
+        else:
             stream = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
                 messages=[{"role": "system", "content": "Tu es IA KLN."}, *st.session_state.messages],
                 stream=True
             )
-            full_res = ""
             placeholder = st.empty()
             for chunk in stream:
                 if chunk.choices[0].delta.content:
-                    full_res += chunk.choices[0].delta.content
-                    placeholder.markdown(full_res + "▌")
-            placeholder.markdown(full_res)
-            st.session_state.messages.append({"role": "assistant", "content": full_res})
+                    reponse_finale += chunk.choices[0].delta.content
+                    placeholder.markdown(reponse_finale + "▌")
+            placeholder.markdown(reponse_finale)
+
+    # SAUVEGARDE AUTOMATIQUE
+    if reponse_finale:
+        st.session_state.messages.append({"role": "assistant", "content": reponse_finale})
+        sauvegarder_memoire(st.session_state.messages)
