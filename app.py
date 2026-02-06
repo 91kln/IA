@@ -5,71 +5,96 @@ import json
 import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="IA KLN - Mémoire", page_icon="🧠", layout="centered")
+st.set_page_config(page_title="IA KLN Multi-Chat", page_icon="🗂️", layout="centered")
 
 st.markdown("""
     <style>
     .stApp { background-color: #131314; color: #ffffff; }
+    .stSidebar { background-color: #1e1f20; }
     </style>
     """, unsafe_allow_html=True)
 
 CLE_API = "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"
 client = Groq(api_key=CLE_API)
-FICHIER_MEMOIRE = "memoire_ia.json"
+FICHIER_MEMOIRE = "multi_chats_kln.json"
 
-# --- FONCTIONS DE MÉMOIRE ---
-def charger_memoire():
+# --- GESTION DE LA MÉMOIRE MULTI-CHATS ---
+def charger_tous_les_chats():
     if os.path.exists(FICHIER_MEMOIRE):
         with open(FICHIER_MEMOIRE, "r") as f:
             return json.load(f)
-    return []
+    # Si premier lancement, on crée un chat par défaut
+    return {"Chat 1": []}
 
-def sauvegarder_memoire(messages):
+def sauvegarder_tous_les_chats(chats):
     with open(FICHIER_MEMOIRE, "w") as f:
-        json.dump(messages, f)
+        json.dump(chats, f)
 
-# Initialisation de la session avec le fichier
-if "messages" not in st.session_state:
-    st.session_state.messages = charger_memoire()
+# Initialisation
+if "tous_chats" not in st.session_state:
+    st.session_state.tous_chats = charger_tous_les_chats()
+if "chat_actuel" not in st.session_state:
+    st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
 
-# --- BARRE LATÉRALE ---
+# --- BARRE LATÉRALE (MENU DES CHATS) ---
 with st.sidebar:
-    st.title("IA KLN 🧠")
-    st.info("Mode Mémoire Longue activé. Vos discussions sont sauvegardées.")
-    if st.button("🗑️ Réinitialiser la mémoire"):
-        st.session_state.messages = []
-        if os.path.exists(FICHIER_MEMOIRE):
-            os.remove(FICHIER_MEMOIRE)
+    st.title("IA KLN 🤖")
+    
+    # Nouveau Chat
+    if st.button("➕ Nouveau Chat"):
+        nouveau_nom = f"Chat {len(st.session_state.tous_chats) + 1}"
+        st.session_state.tous_chats[nouveau_nom] = []
+        st.session_state.chat_actuel = nouveau_nom
+        sauvegarder_tous_les_chats(st.session_state.tous_chats)
         st.rerun()
 
-# --- AFFICHAGE DU CHAT ---
-for msg in st.session_state.messages:
+    st.divider()
+    st.subheader("Tes discussions")
+    
+    # Sélection du chat
+    for nom_chat in list(st.session_state.tous_chats.keys()):
+        col1, col2 = st.columns([4, 1])
+        if col1.button(nom_chat, key=f"select_{nom_chat}", use_container_width=True):
+            st.session_state.chat_actuel = nom_chat
+            st.rerun()
+        if col2.button("🗑️", key=f"del_{nom_chat}"):
+            if len(st.session_state.tous_chats) > 1:
+                del st.session_state.tous_chats[nom_chat]
+                st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
+                sauvegarder_tous_les_chats(st.session_state.tous_chats)
+                st.rerun()
+
+# --- AFFICHAGE DU CHAT ACTUEL ---
+st.caption(f"📍 Discussion actuelle : {st.session_state.chat_actuel}")
+messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
+
+for msg in messages_actuels:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 # --- ZONE IMAGE ---
 st.divider()
-uploaded_file = st.file_uploader("➕ Ajouter une photo", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+uploaded_file = st.file_uploader("📷 Analyser une image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
 if uploaded_file:
-    st.image(uploaded_file, width=250)
+    st.image(uploaded_file, width=200)
 
 # --- LOGIQUE D'ENVOI ---
-if prompt := st.chat_input("Dis-moi quelque chose..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+if prompt := st.chat_input("Écris ton message..."):
+    messages_actuels.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    reponse_finale = ""
+    reponse_ia = ""
 
     with st.chat_message("assistant"):
-        # Cas Secret Anissa
+        # Secret Anissa
         if "amoureuse de ton créateur" in prompt.lower():
-            reponse_finale = "Anissa ❤️"
-            st.markdown(reponse_finale)
+            reponse_ia = "Anissa ❤️"
+            st.markdown(reponse_ia)
         
-        # Cas Vision
+        # Vision
         elif uploaded_file is not None:
-            with st.spinner("IA KLN analyse l'image..."):
+            with st.spinner("Analyse en cours..."):
                 try:
                     bytes_data = uploaded_file.getvalue()
                     base64_image = base64.b64encode(bytes_data).decode('utf-8')
@@ -80,26 +105,26 @@ if prompt := st.chat_input("Dis-moi quelque chose..."):
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                         ]}]
                     )
-                    reponse_finale = response.choices[0].message.content
-                    st.markdown(reponse_finale)
+                    reponse_ia = response.choices[0].message.content
+                    st.markdown(reponse_ia)
                 except Exception as e:
-                    st.error(f"Erreur Vision : {e}")
+                    st.error(f"Erreur : {e}")
         
-        # Cas Texte Normal
+        # Texte normal
         else:
             stream = client.chat.completions.create(
                 model="llama-3.3-70b-versatile",
-                messages=[{"role": "system", "content": "Tu es IA KLN."}, *st.session_state.messages],
+                messages=[{"role": "system", "content": "Tu es IA KLN."}, *messages_actuels],
                 stream=True
             )
             placeholder = st.empty()
             for chunk in stream:
                 if chunk.choices[0].delta.content:
-                    reponse_finale += chunk.choices[0].delta.content
-                    placeholder.markdown(reponse_finale + "▌")
-            placeholder.markdown(reponse_finale)
+                    reponse_ia += chunk.choices[0].delta.content
+                    placeholder.markdown(reponse_ia + "▌")
+            placeholder.markdown(reponse_ia)
 
-    # SAUVEGARDE AUTOMATIQUE
-    if reponse_finale:
-        st.session_state.messages.append({"role": "assistant", "content": reponse_finale})
-        sauvegarder_memoire(st.session_state.messages)
+    if reponse_ia:
+        messages_actuels.append({"role": "assistant", "content": reponse_ia})
+        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
+        sauvegarder_tous_les_chats(st.session_state.tous_chats)
