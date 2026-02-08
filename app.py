@@ -42,7 +42,7 @@ st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style
 
 # Clés API (Remets bien TA clé Tavily ici)
 GROQ_KEY = "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"
-TAVILY_KEY = "tvly-XXXXXXXXXXXX" # <--- TA CLÉ TAVILY ICI
+TAVILY_KEY = "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" # <--- TA CLÉ TAVILY ICI
 
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
@@ -168,3 +168,4 @@ if prompt := st.chat_input("Pose ta question à IA KLN..."):
         messages_actuels.append({"role": "assistant", "content": reponse_ia})
         st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
         sauvegarder_chats(st.session_state.tous_chats)
+
