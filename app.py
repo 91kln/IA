@@ -11,13 +11,13 @@ st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style
 
 # Tes Clés
 GROQ_KEY = "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"
-TAVILY_KEY = "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" # <--- METS TA CLÉ ICI
+TAVILY_KEY = "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"
 
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
 FICHIER_MEMOIRE = "multi_chats_kln.json"
 
-SYSTEM_PROMPT = "Tu es IA KLN. Tu as accès au web. Si une question demande une info récente (sport, actu, dates), utilise les données de recherche fournies pour répondre en français."
+SYSTEM_PROMPT = "Tu es IA KLN. Tu as accès au web. Si une question demande une info récente, utilise les données de recherche fournies pour répondre en français."
 
 # --- GESTION MÉMOIRE ---
 def charger_tous_les_chats():
@@ -59,7 +59,7 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
 
     reponse_ia = ""
     with st.chat_message("assistant"):
-        # 1. Recherche Web si besoin
+        # 1. Recherche Web
         context_web = ""
         mots_cles_actu = ["match", "quand", "aujourd'hui", "score", "météo", "prix", "nouvelle", "pop up"]
         if any(mot in prompt.lower() for mot in mots_cles_actu):
@@ -71,11 +71,12 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
         if uploaded_file:
             img = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
             res = client.chat.completions.create(
-                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                model="llama-3.2-11b-vision-preview", # Modèle vision stable
                 messages=[{"role": "system", "content": SYSTEM_PROMPT},
                           {"role":"user","content":[{"type":"text","text":prompt + context_web},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}]
             )
             reponse_ia = res.choices[0].message.content
+            st.markdown(reponse_ia)
         else:
             historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
             stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=historique, stream=True)
@@ -84,11 +85,9 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
                 if chunk.choices[0].delta.content:
                     reponse_ia += chunk.choices[0].delta.content
                     placeholder.markdown(reponse_ia + "▌")
-        
-        placeholder.markdown(reponse_ia)
+            placeholder.markdown(reponse_ia)
 
     if reponse_ia:
         messages_actuels.append({"role": "assistant", "content": reponse_ia})
         st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
         sauvegarder_tous_les_chats(st.session_state.tous_chats)
-
