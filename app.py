@@ -2,103 +2,55 @@ import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
 import base64
-import json
-import os
 
 # --- CONFIGURATION ---
-st.set_page_config(page_title="IA KLN - Live", page_icon="🌐", layout="centered")
-st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style>", unsafe_allow_html=True)
+st.set_page_config(page_title="IA KLN", page_icon="🤖")
 
-# Tes Clés API
+# Tes Clés
 GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
-FICHIER_MEMOIRE = "multi_chats_kln.json"
 
-SYSTEM_PROMPT = "Tu es IA KLN. Tu as accès au web. Réponds toujours en français."
+st.title("IA KLN 🤖")
 
-# --- GESTION MÉMOIRE ---
-def charger_tous_les_chats():
-    if os.path.exists(FICHIER_MEMOIRE):
-        try:
-            with open(FICHIER_MEMOIRE, "r") as f:
-                return json.load(f)
-        except:
-            return {"Nouveau Chat": []}
-    return {"Nouveau Chat": []}
+# Mémoire de la session uniquement (évite les erreurs de fichier JSON)
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-def sauvegarder_tous_les_chats(chats):
-    # Sécurité pour éviter l'erreur JSON Serializable
-    chats_propres = {}
-    for nom, messages in chats.items():
-        chats_propres[nom] = [
-            {"role": m["role"], "content": str(m["content"])} for m in messages
-        ]
-    with open(FICHIER_MEMOIRE, "w") as f:
-        json.dump(chats_propres, f)
-
-if "tous_chats" not in st.session_state:
-    st.session_state.tous_chats = charger_tous_les_chats()
-if "chat_actuel" not in st.session_state:
-    st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.title("IA KLN 🤖")
-    if st.button("➕ Nouveau Chat"):
-        nom = f"Discussion {len(st.session_state.tous_chats) + 1}"
-        st.session_state.tous_chats[nom] = []
-        st.session_state.chat_actuel = nom
-        st.rerun()
-    
-    if st.button("🗑️ Effacer la mémoire", type="primary"):
-        if os.path.exists(FICHIER_MEMOIRE):
-            os.remove(FICHIER_MEMOIRE)
-        st.session_state.tous_chats = {"Nouveau Chat": []}
-        st.session_state.chat_actuel = "Nouveau Chat"
-        st.rerun()
-    
-    st.divider()
-    for nom_chat in list(st.session_state.tous_chats.keys()):
-        if st.button(nom_chat, key=f"s_{nom_chat}", use_container_width=True):
-            st.session_state.chat_actuel = nom_chat
-            st.rerun()
-
-# --- CHAT ---
-messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
-for msg in messages_actuels:
+# Affichage des messages
+for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
 st.divider()
-uploaded_file = st.file_uploader("➕ Image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+uploaded_file = st.file_uploader("➕ Ajouter une image", type=["jpg", "png", "jpeg"])
 
 if prompt := st.chat_input("Pose ta question..."):
-    messages_actuels.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     reponse_ia = ""
     with st.chat_message("assistant"):
+        # Recherche web automatique
         context_web = ""
-        mots_actu = ["match", "score", "météo", "actu", "aujourd'hui"]
-        if any(m in prompt.lower() for m in mots_actu):
-            with st.spinner("Recherche web..."):
-                try:
-                    search_res = tavily.search(query=prompt)
-                    context_web = f"\n\n[Recherche Web : {search_res}]"
-                except:
-                    pass
+        with st.spinner("Recherche web..."):
+            try:
+                search = tavily.search(query=prompt)
+                context_web = f"\n\n[Infos Web : {search}]"
+            except:
+                pass
 
         try:
             if uploaded_file:
+                # Mode Vision
                 img_b64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
                 res = client.chat.completions.create(
                     model="llama-3.2-90b-vision-preview",
                     messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "system", "content": "Tu es IA KLN. Réponds en français."},
                         {"role": "user", "content": [
                             {"type": "text", "text": prompt + context_web},
                             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
@@ -108,17 +60,15 @@ if prompt := st.chat_input("Pose ta question..."):
                 reponse_ia = res.choices[0].message.content
                 st.markdown(reponse_ia)
             else:
-                historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
+                # Mode Texte
                 stream = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
-                    messages=historique,
+                    messages=[{"role": "system", "content": "Tu es IA KLN." + context_web}] + st.session_state.messages,
                     stream=True
                 )
                 reponse_ia = st.write_stream(stream)
         except Exception as e:
-            st.error(f"Erreur : {e}")
+            st.error(f"Oups, une erreur : {e}")
 
     if reponse_ia:
-        messages_actuels.append({"role": "assistant", "content": str(reponse_ia)})
-        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
-        sauvegarder_tous_les_chats(st.session_state.tous_chats)
+        st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
