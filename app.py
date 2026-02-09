@@ -9,7 +9,7 @@ import os
 st.set_page_config(page_title="IA KLN - Live", page_icon="🌐", layout="centered")
 st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style>", unsafe_allow_html=True)
 
-# REMPLACE CETTE CLÉ PAR UNE NEUVE SI L'ERREUR PERSISTE
+# Clés API Validées
 GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
@@ -33,7 +33,7 @@ def sauvegarder_tous_les_chats(chats):
 if "tous_chats" not in st.session_state: st.session_state.tous_chats = charger_tous_les_chats()
 if "chat_actuel" not in st.session_state: st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
 
-# --- SIDEBAR ---
+# --- SIDEBAR (HISTORIQUE) ---
 with st.sidebar:
     st.title("IA KLN 🤖")
     if st.button("➕ Nouveau Chat"):
@@ -53,7 +53,7 @@ for msg in messages_actuels:
     with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
 st.divider()
-uploaded_file = st.file_uploader("➕ Image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+uploaded_file = st.file_uploader("➕ Ajouter une image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
 
 if prompt := st.chat_input("Pose n'importe quelle question..."):
     messages_actuels.append({"role": "user", "content": prompt})
@@ -62,45 +62,6 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
     reponse_ia = ""
     with st.chat_message("assistant"):
         context_web = ""
-        # Recherche auto si questions d'actualité
-        mots_cles = ["match", "quand", "aujourd'hui", "score", "météo", "actu"]
-        if any(m in prompt.lower() for m in mots_cles):
+        mots_actu = ["match", "score", "météo", "actu", "aujourd'hui"]
+        if any(m in prompt.lower() for m in mots_actu):
             with st.spinner("Recherche web..."):
-                try:
-                    search_res = tavily.search(query=prompt)
-                    context_web = f"\n\nInfos Web : {search_res}"
-                except: pass
-
-        try:
-            if uploaded_file:
-                # Mode Vision
-                img_b64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
-                res = client.chat.completions.create(
-                    model="llama-3.2-11b-vision-preview",
-                    messages=[
-                        {"role": "system", "content": SYSTEM_PROMPT},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": prompt + context_web},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                        ]}
-                    ]
-                )
-                reponse_ia = res.choices[0].message.content
-                st.markdown(reponse_ia)
-            else:
-                # Mode Texte normal
-                historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
-                stream = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=historique,
-                    stream=True
-                )
-                reponse_ia = st.write_stream(stream)
-        except Exception as e:
-            st.error(f"Erreur Groq : {e}")
-
-    if reponse_ia:
-        messages_actuels.append({"role": "assistant", "content": reponse_ia})
-        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
-        sauvegarder_tous_les_chats(st.session_state.tous_chats)
-
