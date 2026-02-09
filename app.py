@@ -1,44 +1,39 @@
 import streamlit as st
-from streamlit_google_auth import Authenticate
+from streamlit_google_oauth import login_button
 from groq import Groq
 from tavily import TavilyClient
 
-# --- CONFIGURATION DES CLÉS ---
+# --- CONFIGURATION ---
 CLIENT_ID = "1067398544382-cnf0oaqct1u8dkukken7ergftk7k8jut.apps.googleusercontent.com"
 CLIENT_SECRET = "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"
 
 st.set_page_config(page_title="IA KLN", page_icon="🤖")
 
-# --- AUTHENTIFICATION GOOGLE ---
-# On crée l'objet d'authentification manuellement pour éviter les bugs
-if 'connected' not in st.session_state:
+if "connected" not in st.session_state:
     st.session_state.connected = False
 
-authenticator = Authenticate(
-    secret_path=None, # On ne passe pas par le JSON pour éviter les erreurs de chemin
-    client_id=CLIENT_ID,
-    client_secret=CLIENT_SECRET,
-    redirect_uri="https://killian.streamlit.app",
-    cookie_name="ia_kln_cookie",
-    cookie_key="secret_cookie_kln_2026",
-)
-
-# Vérifie si l'utilisateur vient de se connecter
-authenticator.check_authentification()
-
+# --- AUTHENTIFICATION ---
 if not st.session_state.connected:
     st.title("IA KLN 🤖")
     st.write("Connecte-toi avec Google pour accéder à ton IA.")
-    authenticator.login()
+    
+    # Cette fonction est la plus stable. L'URL doit être EXACTEMENT celle de Google Cloud.
+    login_info = login_button(CLIENT_ID, CLIENT_SECRET, "https://killian.streamlit.app")
+    
+    if login_info:
+        st.session_state.connected = True
+        st.session_state.user_info = login_info
+        st.rerun()
     st.stop()
 
-# --- INTERFACE IA (Si connecté) ---
+# --- SI CONNECTÉ ---
 user_name = st.session_state.user_info.get('name', 'Killian')
-st.sidebar.write(f"Salut {user_name} !")
+st.sidebar.write(f"Connecté : {user_name}")
 if st.sidebar.button("Déconnexion"):
-    authenticator.logout()
+    st.session_state.connected = False
+    st.rerun()
 
-# Initialisation Groq et Tavily
+# IA & Recherche
 client = Groq(api_key="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")
 tavily = TavilyClient(api_key="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")
 
