@@ -1,70 +1,93 @@
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
+import base64
+import json
+import os
 
-# Tes identifiants vérifiés (image_919606.png)
-ID = "1067398544382-cnf0oaqct1u8dkukken7ergftk7k8jut.apps.googleusercontent.com"
+# --- CONFIGURATION ---
+st.set_page_config(page_title="IA KLN - Live", page_icon="🌐", layout="centered")
+st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style>", unsafe_allow_html=True)
+
+# Tes Clés
 GROQ_KEY = "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"
-TAVILY_KEY = "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"
+TAVILY_KEY = "METS_TA_CLE_TAVILY_ICI" # <--- METS TA CLÉ ICI
 
-st.set_page_config(page_title="IA KLN", page_icon="🤖")
-
-if "connected" not in st.session_state:
-    st.session_state.connected = False
-
-# --- ÉCRAN DE CONNEXION ---
-if not st.session_state.connected:
-    st.title("IA KLN 🤖")
-    st.write("Connecte-toi pour activer ton IA privée.")
-    
-    # Lien Google avec scope 'openid' uniquement (le plus simple pour éviter 403)
-    auth_url = (
-        f"https://accounts.google.com/o/oauth2/v2/auth?"
-        f"client_id={ID}&"
-        f"response_type=token&"
-        f"scope=openid&"
-        f"redirect_uri=https://killian.streamlit.app"
-    )
-    
-    st.markdown(f'''
-        <a href="{auth_url}" target="_self" style="text-decoration:none;">
-            <div style="background-color:#4285F4;color:white;padding:15px;border-radius:5px;text-align:center;font-weight:bold;cursor:pointer;">
-                Se connecter avec Google
-            </div>
-        </a>
-    ''', unsafe_allow_html=True)
-    
-    if st.button("Mode Secours (Accès direct)"):
-        st.session_state.connected = True
-        st.rerun()
-    st.stop()
-
-# --- INTERFACE IA ---
-st.title("IA KLN 🤖")
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
+FICHIER_MEMOIRE = "multi_chats_kln.json"
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+SYSTEM_PROMPT = "Tu es IA KLN. Tu as accès au web. Si une question demande une info récente (sport, actu, dates), utilise les données de recherche fournies pour répondre en français."
 
-for msg in st.session_state.messages:
+# --- GESTION MÉMOIRE ---
+def charger_tous_les_chats():
+    if os.path.exists(FICHIER_MEMOIRE):
+        with open(FICHIER_MEMOIRE, "r") as f: return json.load(f)
+    return {"Nouveau Chat": []}
+
+def sauvegarder_tous_les_chats(chats):
+    with open(FICHIER_MEMOIRE, "w") as f: json.dump(chats, f)
+
+if "tous_chats" not in st.session_state: st.session_state.tous_chats = charger_tous_les_chats()
+if "chat_actuel" not in st.session_state: st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
+
+# --- SIDEBAR ---
+with st.sidebar:
+    st.title("IA KLN 🤖")
+    if st.button("➕ Nouveau Chat"):
+        nom = f"Discussion {len(st.session_state.tous_chats) + 1}"
+        st.session_state.tous_chats[nom] = []
+        st.session_state.chat_actuel = nom
+        st.rerun()
+    st.divider()
+    for nom_chat in list(st.session_state.tous_chats.keys()):
+        if st.button(nom_chat, key=f"s_{nom_chat}", use_container_width=True):
+            st.session_state.chat_actuel = nom_chat
+            st.rerun()
+
+# --- CHAT ---
+messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
+for msg in messages_actuels:
     with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-if prompt := st.chat_input("Pose ta question..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
+st.divider()
+uploaded_file = st.file_uploader("➕ Image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+
+if prompt := st.chat_input("Pose n'importe quelle question..."):
+    messages_actuels.append({"role": "user", "content": prompt})
     with st.chat_message("user"): st.markdown(prompt)
 
+    reponse_ia = ""
     with st.chat_message("assistant"):
-        with st.spinner("Recherche web..."):
-            try:
-                search = tavily.search(query=prompt)
-                context = f"\n\n[Web : {search}]"
-            except: context = ""
-            
-        stream = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": "Tu es IA KLN. Réponds en français." + context}] + st.session_state.messages,
-            stream=True
-        )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        # 1. Recherche Web si besoin
+        context_web = ""
+        mots_cles_actu = ["match", "quand", "aujourd'hui", "score", "météo", "prix", "nouvelle", "pop up"]
+        if any(mot in prompt.lower() for mot in mots_cles_actu):
+            with st.spinner("Recherche sur le web..."):
+                search_res = tavily.search(query=prompt, search_depth="advanced")
+                context_web = "\n\nInfos trouvées sur le web : " + str(search_res)
+
+        # 2. Vision ou Texte
+        if uploaded_file:
+            img = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+            res = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[{"role": "system", "content": SYSTEM_PROMPT},
+                          {"role":"user","content":[{"type":"text","text":prompt + context_web},{"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}]
+            )
+            reponse_ia = res.choices[0].message.content
+        else:
+            historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
+            stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=historique, stream=True)
+            placeholder = st.empty()
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    reponse_ia += chunk.choices[0].delta.content
+                    placeholder.markdown(reponse_ia + "▌")
+        
+        placeholder.markdown(reponse_ia)
+
+    if reponse_ia:
+        messages_actuels.append({"role": "assistant", "content": reponse_ia})
+        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
+        sauvegarder_tous_les_chats(st.session_state.tous_chats)
