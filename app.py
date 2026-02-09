@@ -1,53 +1,63 @@
 import streamlit as st
+from streamlit_google_auth import Authenticate
 from groq import Groq
 from tavily import TavilyClient
 
-# --- CONFIGURATION ---
-GROQ_KEY = "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"
-TAVILY_KEY = "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"
+# --- CONFIGURATION DES CLÉS ---
+CLIENT_ID = "1067398544382-cnf0oaqct1u8dkukken7ergftk7k8jut.apps.googleusercontent.com"
+CLIENT_SECRET = "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"
 
 st.set_page_config(page_title="IA KLN", page_icon="🤖")
 
-# --- SYSTÈME DE SÉCURITÉ SIMPLE ---
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
+# --- AUTHENTIFICATION GOOGLE ---
+# On crée l'objet d'authentification manuellement pour éviter les bugs
+if 'connected' not in st.session_state:
+    st.session_state.connected = False
 
-if not st.session_state.authenticated:
+authenticator = Authenticate(
+    secret_path=None, # On ne passe pas par le JSON pour éviter les erreurs de chemin
+    client_id=CLIENT_ID,
+    client_secret=CLIENT_SECRET,
+    redirect_uri="https://killian.streamlit.app",
+    cookie_name="ia_kln_cookie",
+    cookie_key="secret_cookie_kln_2026",
+)
+
+# Vérifie si l'utilisateur vient de se connecter
+authenticator.check_authentification()
+
+if not st.session_state.connected:
     st.title("IA KLN 🤖")
-    password = st.text_input("Entre ton mot de passe Killian :", type="password")
-    if password == "kln2026": # Ton mot de passe provisoire
-        st.session_state.authenticated = True
-        st.rerun()
+    st.write("Connecte-toi avec Google pour accéder à ton IA.")
+    authenticator.login()
     st.stop()
 
-# --- INTERFACE IA ---
-st.title("IA KLN 🤖")
-client = Groq(api_key=GROQ_KEY)
-tavily = TavilyClient(api_key=TAVILY_KEY)
+# --- INTERFACE IA (Si connecté) ---
+user_name = st.session_state.user_info.get('name', 'Killian')
+st.sidebar.write(f"Salut {user_name} !")
+if st.sidebar.button("Déconnexion"):
+    authenticator.logout()
+
+# Initialisation Groq et Tavily
+client = Groq(api_key="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")
+tavily = TavilyClient(api_key="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")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-if prompt := st.chat_input("Pose ta question..."):
+if prompt := st.chat_input("Dis-moi tout..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    with st.chat_message("user"): st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        # Recherche web
-        with st.spinner("Recherche..."):
-            search = tavily.search(query=prompt)
-            context = f"\n\nInfos Web : {search}"
-        
-        # Réponse IA
-        stream = client.chat.completions.create(
+        search = tavily.search(query=prompt)
+        res = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": "Tu es IA KLN." + context}] + st.session_state.messages,
-            stream=True
+            messages=[{"role": "system", "content": f"Tu es IA KLN. Web: {search}"}] + st.session_state.messages
         )
-        response = st.write_stream(stream)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        response = res.choices[0].message.content
+        st.write(response)
+        st.session_state.messages.append({"role": "assistant", "content": response})
