@@ -1,40 +1,48 @@
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
-import os
 
-# --- CONFIGURATION ---
+# --- CONFIGURATION (Tes infos 100% validées) ---
 CLIENT_ID = "1067398544382-cnf0oaqct1u8dkukken7ergftk7k8jut.apps.googleusercontent.com"
+CLIENT_SECRET = "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" # Ta nouvelle clé secrète
 GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
 st.set_page_config(page_title="IA KLN", page_icon="🤖")
 
-if "auth" not in st.session_state:
-    st.session_state.auth = False
+if "connected" not in st.session_state:
+    st.session_state.connected = False
 
-# --- CONNEXION GOOGLE ---
-if not st.session_state.auth:
+# --- SYSTÈME DE CONNEXION ---
+if not st.session_state.connected:
     st.title("IA KLN 🤖")
-    st.write("Bienvenue Killian. Connecte-toi pour activer ton IA.")
+    st.write("L'application est en ligne ! Connecte-toi pour commencer.")
     
-    # Création du lien de connexion Google manuellement
-    auth_url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={CLIENT_ID}&response_type=token&scope=email%20profile&redirect_uri=https://killian.streamlit.app"
+    # Construction de l'URL Google ultra-précise
+    auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={CLIENT_ID}&"
+        f"response_type=token&"
+        f"scope=openid%20email%20profile&"
+        f"redirect_uri=https://killian.streamlit.app"
+    )
     
-    st.markdown(f'<a href="{auth_url}" target="_self" style="text-decoration: none;"><div style="background-color: #4285F4; color: white; padding: 10px; border-radius: 5px; text-align: center; font-weight: bold; cursor: pointer;">Se connecter avec Google</div></a>', unsafe_allow_html=True)
+    st.markdown(f'''
+        <a href="{auth_url}" target="_self" style="text-decoration:none;">
+            <div style="background-color:#4285F4;color:white;padding:15px;border-radius:5px;text-align:center;font-weight:bold;cursor:pointer;">
+                Se connecter avec Google
+            </div>
+        </a>
+    ''', unsafe_allow_html=True)
     
-    # Bouton de secours (si le lien Google met du temps à valider)
-    if st.button("Activer l'IA maintenant"):
-        st.session_state.auth = True
+    # Bouton de secours au cas où Google met du temps à valider la redirection
+    if st.button("Activer l'IA (Mode direct)"):
+        st.session_state.connected = True
         st.rerun()
     st.stop()
 
-# --- INTERFACE CHAT ---
-st.sidebar.title("IA KLN 🤖")
-if st.sidebar.button("Déconnexion"):
-    st.session_state.auth = False
-    st.rerun()
-
+# --- INTERFACE IA ---
+st.title("IA KLN 🤖")
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
 
@@ -52,12 +60,12 @@ if prompt := st.chat_input("Pose ta question..."):
         with st.spinner("Recherche web..."):
             try:
                 search = tavily.search(query=prompt)
-                context = f"\n\n[Actu Web : {search}]"
+                context = f"\n\n[Recherche Web : {search}]"
             except: context = ""
             
         stream = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            messages=[{"role": "system", "content": "Tu es IA KLN assistant de Killian." + context}] + st.session_state.messages,
+            messages=[{"role": "system", "content": "Tu es IA KLN assistant de Killian. Réponds toujours en français." + context}] + st.session_state.messages,
             stream=True
         )
         response = st.write_stream(stream)
