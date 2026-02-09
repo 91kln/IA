@@ -65,3 +65,4 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
         mots_actu = ["match", "score", "météo", "actu", "aujourd'hui"]
         if any(m in prompt.lower() for m in mots_actu):
             with st.spinner("Recherche web..."):
+
