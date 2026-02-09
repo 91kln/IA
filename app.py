@@ -10,7 +10,7 @@ st.set_page_config(page_title="IA KLN - Live", page_icon="🌐", layout="centere
 st.markdown("<style>.stApp { background-color: #131314; color: #ffffff; }</style>", unsafe_allow_html=True)
 
 # REMPLACE CETTE CLÉ PAR UNE NEUVE SI L'ERREUR PERSISTE
-GROQ_KEY = "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"
+GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
 client = Groq(api_key=GROQ_KEY)
@@ -103,3 +103,4 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
         messages_actuels.append({"role": "assistant", "content": reponse_ia})
         st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
         sauvegarder_tous_les_chats(st.session_state.tous_chats)
+
