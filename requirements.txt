@@ -1,4 +1,4 @@
 streamlit
 groq
 tavily-python
-streamlit-google-oauth
+google-auth-oauthlib
