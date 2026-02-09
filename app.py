@@ -21,7 +21,7 @@ if not st.session_state.connected:
     st.write("Connecte-toi avec Google pour accéder à ton IA privée.")
     
     # Bouton Google - L'URL doit être celle configurée dans ta console Google
-    login_data = login_button(CLIENT_ID, CLIENT_SECRET, "https://ia-kln.streamlit.app")
+    login_data = login_button(CLIENT_ID, CLIENT_SECRET, "https://killian.streamlit.app")
     
     if login_data:
         st.session_state.connected = True
@@ -93,3 +93,4 @@ if prompt := st.chat_input("Pose ta question à IA KLN..."):
     # Sauvegarde
     st.session_state.messages.append({"role": "assistant", "content": response})
     with open(FICHIER_MEMOIRE, "w") as f: json.dump(st.session_state.messages, f)
+
