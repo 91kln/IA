@@ -65,4 +65,41 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
         mots_actu = ["match", "score", "météo", "actu", "aujourd'hui"]
         if any(m in prompt.lower() for m in mots_actu):
             with st.spinner("Recherche web..."):
+                try:
+                    search_res = tavily.search(query=prompt)
+                    context_web = f"\n\n[Recherche Web : {search_res}]"
+                except:
+                    pass
 
+        try:
+            if uploaded_file:
+                # Modèle de vision à jour
+                img_b64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+                res = client.chat.completions.create(
+                    model="llama-3.2-90b-vision-preview",
+                    messages=[
+                        {"role": "system", "content": SYSTEM_PROMPT},
+                        {"role": "user", "content": [
+                            {"type": "text", "text": prompt + context_web},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
+                        ]}
+                    ]
+                )
+                reponse_ia = res.choices[0].message.content
+                st.markdown(reponse_ia)
+            else:
+                # Modèle texte ultra-rapide
+                historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
+                stream = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=historique,
+                    stream=True
+                )
+                reponse_ia = st.write_stream(stream)
+        except Exception as e:
+            st.error(f"Erreur Groq : {e}")
+
+    if reponse_ia:
+        messages_actuels.append({"role": "assistant", "content": reponse_ia})
+        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
+        sauvegarder_tous_les_chats(st.session_state.tous_chats)
