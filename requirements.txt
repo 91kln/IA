@@ -1,4 +1,4 @@
-streamlit==1.31.0
+streamlit
 groq
 tavily-python
 streamlit-google-oauth
