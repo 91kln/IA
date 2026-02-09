@@ -6,7 +6,7 @@ import base64
 # --- CONFIGURATION ---
 st.set_page_config(page_title="IA KLN", page_icon="🤖")
 
-# Tes Clés
+# Tes Clés validées (image_919606.png)
 GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
@@ -15,7 +15,7 @@ tavily = TavilyClient(api_key=TAVILY_KEY)
 
 st.title("IA KLN 🤖")
 
-# Mémoire de la session uniquement (évite les erreurs de fichier JSON)
+# Mémoire de session uniquement (zéro erreur JSON)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -36,39 +36,17 @@ if prompt := st.chat_input("Pose ta question..."):
     with st.chat_message("assistant"):
         # Recherche web automatique
         context_web = ""
-        with st.spinner("Recherche web..."):
-            try:
-                search = tavily.search(query=prompt)
-                context_web = f"\n\n[Infos Web : {search}]"
-            except:
-                pass
+        try:
+            search = tavily.search(query=prompt)
+            context_web = f"\n\n[Infos Web : {search}]"
+        except:
+            pass
 
         try:
             if uploaded_file:
-                # Mode Vision
+                # Modèle Vision stable (Llama 3.2 11B Vision)
                 img_b64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
                 res = client.chat.completions.create(
-                    model="llama-3.2-90b-vision-preview",
+                    model="llama-3.2-11b-vision-preview",
                     messages=[
-                        {"role": "system", "content": "Tu es IA KLN. Réponds en français."},
-                        {"role": "user", "content": [
-                            {"type": "text", "text": prompt + context_web},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}}
-                        ]}
-                    ]
-                )
-                reponse_ia = res.choices[0].message.content
-                st.markdown(reponse_ia)
-            else:
-                # Mode Texte
-                stream = client.chat.completions.create(
-                    model="llama-3.3-70b-versatile",
-                    messages=[{"role": "system", "content": "Tu es IA KLN." + context_web}] + st.session_state.messages,
-                    stream=True
-                )
-                reponse_ia = st.write_stream(stream)
-        except Exception as e:
-            st.error(f"Oups, une erreur : {e}")
-
-    if reponse_ia:
-        st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
+                        {"role": "
