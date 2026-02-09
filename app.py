@@ -45,7 +45,7 @@ if prompt := st.chat_input("Pose ta question..."):
 
         try:
             if uploaded_file:
-                # Modèle Vision ACTIF (Llama 3.2 11B)
+                # Mode Vision
                 img_b64 = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
                 res = client.chat.completions.create(
                     model="llama-3.2-11b-vision-preview",
@@ -60,3 +60,16 @@ if prompt := st.chat_input("Pose ta question..."):
                 reponse_ia = res.choices[0].message.content
                 st.markdown(reponse_ia)
             else:
+                # Mode Texte (L'indentation ici est maintenant correcte)
+                stream = client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[{"role": "system", "content": "Tu es IA KLN. Réponds en français." + context_web}] + st.session_state.messages,
+                    stream=True
+                )
+                reponse_ia = st.write_stream(stream)
+        except Exception as e:
+            st.error(f"Erreur : {e}")
+
+    # Sauvegarde de la réponse
+    if reponse_ia:
+        st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
