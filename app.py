@@ -13,7 +13,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # Ta clé API
-CLE_API = "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"
+CLE_API = "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"
 client = Groq(api_key=CLE_API)
 
 if "messages" not in st.session_state:
@@ -93,3 +93,4 @@ if prompt := st.chat_input("Pose ta question sur l'image ou autre..."):
                     placeholder.markdown(full_res + "▌")
             placeholder.markdown(full_res)
             st.session_state.messages.append({"role": "assistant", "content": full_res})
+
