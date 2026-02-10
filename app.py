@@ -1,5 +1,3 @@
-refait le code en entier je te r'envoie mon code 
-
 import streamlit as st
 from groq import Groq
 from tavily import TavilyClient
@@ -93,3 +91,4 @@ if prompt := st.chat_input("Pose n'importe quelle question..."):
         messages_actuels.append({"role": "assistant", "content": reponse_ia})
         st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
         sauvegarder_tous_les_chats(st.session_state.tous_chats)
+
