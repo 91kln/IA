@@ -10,34 +10,23 @@ st.set_page_config(page_title="IA KLN - Expert", page_icon="🤖", layout="wide"
 
 st.markdown("""
 <style>
-    /* Fond sombre */
     .stApp { background-color: #0E1117; color: #FAFAFA; }
-    
-    /* Bulles de chat arrondies */
     [data-testid="stChatMessage"] {
         border-radius: 20px;
         margin-bottom: 15px;
         padding: 15px;
         border: 1px solid #30363d;
     }
-    
-    /* Barre latérale moderne */
     section[data-testid="stSidebar"] {
         background-color: #161B22 !important;
         border-right: 1px solid #30363d;
     }
-    
-    /* Boutons stylisés */
     .stButton>button {
         border-radius: 10px;
         border: 1px solid #30363d;
         background-color: #21262d;
         color: #c9d1d9;
         transition: 0.3s;
-    }
-    .stButton>button:hover {
-        border-color: #8b949e;
-        background-color: #30363d;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -49,8 +38,6 @@ TAVILY_KEY = "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"
 client = Groq(api_key=GROQ_KEY)
 tavily = TavilyClient(api_key=TAVILY_KEY)
 FICHIER_MEMOIRE = "multi_chats_kln.json"
-
-SYSTEM_PROMPT = "Tu es IA KLN. Tu as accès au web. Si une question demande une info récente (sport, actu, dates), utilise les données de recherche fournies pour répondre en français."
 
 # --- 2. GESTION MÉMOIRE ---
 def charger_tous_les_chats():
@@ -80,12 +67,17 @@ with st.sidebar:
             st.session_state.chat_actuel = nom_chat
             st.rerun()
 
-# --- 4. LAYOUT EN COLONNES (L'INTERFACE PRO) ---
+# --- 4. LAYOUT EN COLONNES ---
 col_main, col_info = st.columns([3, 1])
 
 with col_info:
-    st.subheader("🛠️ Outils & Infos")
-    st.info("Utilisez **Vision** pour les maths ou la recherche **Web** pour l'actu.")
+    st.subheader("🛠️ Outils & Modes")
+    # LE VOICI : L'interrupteur pour le mode maths
+    mode_maths = st.toggle("📐 Mode Expert Maths", help="Active une analyse mathématique détaillée")
+    
+    st.divider()
+    st.info("Utilisez **Vision** pour les exercices ou la recherche **Web** pour l'actu.")
+    
     if st.button("🗑️ Vider ce chat"):
         st.session_state.tous_chats[st.session_state.chat_actuel] = []
         sauvegarder_tous_les_chats(st.session_state.tous_chats)
@@ -94,6 +86,11 @@ with col_info:
 with col_main:
     st.title(f"📍 {st.session_state.chat_actuel}")
     
+    # Adaptation du Prompt selon le mode activé
+    prompt_final = "Tu es IA KLN. Tu as accès au web. Réponds en français."
+    if mode_maths:
+        prompt_final += " MODE MATHS ACTIVÉ : Tu es un expert en mathématiques. Détaille chaque étape de calcul, explique les théorèmes utilisés et utilise le format LaTeX pour les formules."
+
     messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
     for msg in messages_actuels:
         with st.chat_message(msg["role"]): st.markdown(msg["content"])
@@ -109,27 +106,25 @@ with col_main:
         with st.chat_message("assistant"):
             # Recherche Web
             context_web = ""
-            mots_cles_actu = ["match", "quand", "aujourd'hui", "score", "météo", "prix", "nouvelle", "pop up"]
-            if any(mot in prompt.lower() for mot in mots_cles_actu):
+            if any(mot in prompt.lower() for mot in ["match", "quand", "aujourd'hui", "score", "météo", "actu"]):
                 with st.spinner("Recherche sur le web..."):
                     try:
                         search_res = tavily.search(query=prompt, search_depth="advanced")
-                        context_web = "\n\nInfos trouvées sur le web : " + str(search_res)
+                        context_web = "\n\nInfos Web : " + str(search_res)
                     except: pass
 
-            # Ton système original Vision ou Texte
             if uploaded_file:
                 img = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
                 res = client.chat.completions.create(
                     model="meta-llama/llama-4-scout-17b-16e-instruct",
-                    messages=[{"role": "system", "content": SYSTEM_PROMPT},
+                    messages=[{"role": "system", "content": prompt_final},
                               {"role":"user","content":[{"type":"text","text":prompt + context_web},
                                                        {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}]
                 )
                 reponse_ia = res.choices[0].message.content
                 st.markdown(reponse_ia)
             else:
-                historique = [{"role": "system", "content": SYSTEM_PROMPT + context_web}] + messages_actuels
+                historique = [{"role": "system", "content": prompt_final + context_web}] + messages_actuels
                 stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=historique, stream=True)
                 placeholder = st.empty()
                 for chunk in stream:
