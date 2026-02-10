@@ -5,28 +5,29 @@ import base64
 import json
 import os
 
-# --- 1. CONFIGURATION & DESIGN PREMIUM ---
-st.set_page_config(page_title="IA KLN - Expert", page_icon="🤖", layout="wide")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="IA KLN", page_icon="🤖", layout="centered")
 
 st.markdown("""
 <style>
     .stApp { background-color: #0E1117; color: #FAFAFA; }
+    
+    /* Bulles de chat style ChatGPT */
     [data-testid="stChatMessage"] {
-        border-radius: 20px;
-        margin-bottom: 15px;
-        padding: 15px;
+        border-radius: 15px;
+        margin-bottom: 10px;
+        padding: 12px;
         border: 1px solid #30363d;
     }
+
+    /* Rendre le bouton d'upload plus petit (style +) */
+    .stFileUploader {
+        padding-top: 0;
+    }
+    
+    /* Fixer la zone de saisie en bas */
     section[data-testid="stSidebar"] {
         background-color: #161B22 !important;
-        border-right: 1px solid #30363d;
-    }
-    .stButton>button {
-        border-radius: 10px;
-        border: 1px solid #30363d;
-        background-color: #21262d;
-        color: #c9d1d9;
-        transition: 0.3s;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -53,87 +54,79 @@ def sauvegarder_tous_les_chats(chats):
 if "tous_chats" not in st.session_state: st.session_state.tous_chats = charger_tous_les_chats()
 if "chat_actuel" not in st.session_state: st.session_state.chat_actuel = list(st.session_state.tous_chats.keys())[0]
 
-# --- 3. SIDEBAR ---
+# --- 3. SIDEBAR (Design épuré) ---
 with st.sidebar:
     st.title("IA KLN 🤖")
-    if st.button("➕ Nouveau Chat"):
+    
+    # Mode Maths
+    mode_maths = st.toggle("📐 Mode Expert Maths")
+    
+    st.divider()
+    
+    # Zone d'upload discrète (Le petit "+" est ici)
+    uploaded_file = st.file_uploader("➕ Ajouter une image", type=["jpg", "png", "jpeg"])
+    
+    st.divider()
+    if st.button("➕ Nouveau Chat", use_container_width=True):
         nom = f"Discussion {len(st.session_state.tous_chats) + 1}"
         st.session_state.tous_chats[nom] = []
         st.session_state.chat_actuel = nom
         st.rerun()
-    st.divider()
+        
+    st.markdown("### 📜 Historique")
     for nom_chat in list(st.session_state.tous_chats.keys()):
         if st.button(nom_chat, key=f"s_{nom_chat}", use_container_width=True):
             st.session_state.chat_actuel = nom_chat
             st.rerun()
-
-# --- 4. LAYOUT EN COLONNES ---
-col_main, col_info = st.columns([3, 1])
-
-with col_info:
-    st.subheader("🛠️ Outils & Modes")
-    # LE VOICI : L'interrupteur pour le mode maths
-    mode_maths = st.toggle("📐 Mode Expert Maths", help="Active une analyse mathématique détaillée")
     
-    st.divider()
-    st.info("Utilisez **Vision** pour les exercices ou la recherche **Web** pour l'actu.")
-    
-    if st.button("🗑️ Vider ce chat"):
+    if st.button("🗑️ Vider ce chat", type="primary", use_container_width=True):
         st.session_state.tous_chats[st.session_state.chat_actuel] = []
         sauvegarder_tous_les_chats(st.session_state.tous_chats)
         st.rerun()
 
-with col_main:
-    st.title(f"📍 {st.session_state.chat_actuel}")
-    
-    # Adaptation du Prompt selon le mode activé
-    prompt_final = "Tu es IA KLN. Tu as accès au web. Réponds en français."
-    if mode_maths:
-        prompt_final += " MODE MATHS ACTIVÉ : Tu es un expert en mathématiques. Détaille chaque étape de calcul, explique les théorèmes utilisés et utilise le format LaTeX pour les formules."
+# --- 4. CHAT PRINCIPAL ---
+st.title(f"📍 {st.session_state.chat_actuel}")
 
-    messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
-    for msg in messages_actuels:
-        with st.chat_message(msg["role"]): st.markdown(msg["content"])
+prompt_final = "Tu es IA KLN. Réponds en français."
+if mode_maths:
+    prompt_final += " MODE MATHS ACTIVÉ : Détaille chaque étape et utilise LaTeX."
 
-    st.divider()
-    uploaded_file = st.file_uploader("➕ Image", type=["jpg", "png", "jpeg"], label_visibility="collapsed")
+messages_actuels = st.session_state.tous_chats[st.session_state.chat_actuel]
+for msg in messages_actuels:
+    with st.chat_message(msg["role"]): st.markdown(msg["content"])
 
-    if prompt := st.chat_input("Pose n'importe quelle question..."):
-        messages_actuels.append({"role": "user", "content": prompt})
-        with st.chat_message("user"): st.markdown(prompt)
+# Champ de saisie
+if prompt := st.chat_input("Pose ta question..."):
+    messages_actuels.append({"role": "user", "content": prompt})
+    with st.chat_message("user"): st.markdown(prompt)
 
-        reponse_ia = ""
-        with st.chat_message("assistant"):
-            # Recherche Web
-            context_web = ""
-            if any(mot in prompt.lower() for mot in ["match", "quand", "aujourd'hui", "score", "météo", "actu"]):
-                with st.spinner("Recherche sur le web..."):
-                    try:
-                        search_res = tavily.search(query=prompt, search_depth="advanced")
-                        context_web = "\n\nInfos Web : " + str(search_res)
-                    except: pass
+    reponse_ia = ""
+    with st.chat_message("assistant"):
+        context_web = ""
+        # Recherche auto
+        if any(mot in prompt.lower() for mot in ["match", "score", "météo", "actu"]):
+            with st.spinner("Recherche..."):
+                try:
+                    search = tavily.search(query=prompt)
+                    context_web = f"\n\n[Web: {search}]"
+                except: pass
 
-            if uploaded_file:
-                img = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
-                res = client.chat.completions.create(
-                    model="meta-llama/llama-4-scout-17b-16e-instruct",
-                    messages=[{"role": "system", "content": prompt_final},
-                              {"role":"user","content":[{"type":"text","text":prompt + context_web},
-                                                       {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}]
-                )
-                reponse_ia = res.choices[0].message.content
-                st.markdown(reponse_ia)
-            else:
-                historique = [{"role": "system", "content": prompt_final + context_web}] + messages_actuels
-                stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=historique, stream=True)
-                placeholder = st.empty()
-                for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        reponse_ia += chunk.choices[0].delta.content
-                        placeholder.markdown(reponse_ia + "▌")
-                placeholder.markdown(reponse_ia)
+        if uploaded_file:
+            img = base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+            res = client.chat.completions.create(
+                model="meta-llama/llama-4-scout-17b-16e-instruct",
+                messages=[{"role": "system", "content": prompt_final},
+                          {"role":"user","content":[{"type":"text","text":prompt + context_web},
+                                                   {"type":"image_url","image_url":{"url":f"data:image/jpeg;base64,{img}"}}]}]
+            )
+            reponse_ia = res.choices[0].message.content
+            st.markdown(reponse_ia)
+        else:
+            historique = [{"role": "system", "content": prompt_final + context_web}] + messages_actuels
+            stream = client.chat.completions.create(model="llama-3.3-70b-versatile", messages=historique, stream=True)
+            reponse_ia = st.write_stream(stream)
 
-        if reponse_ia:
-            messages_actuels.append({"role": "assistant", "content": reponse_ia})
-            st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
-            sauvegarder_tous_les_chats(st.session_state.tous_chats)
+    if reponse_ia:
+        messages_actuels.append({"role": "assistant", "content": reponse_ia})
+        st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
+        sauvegarder_tous_les_chats(st.session_state.tous_chats)
