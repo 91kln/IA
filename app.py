@@ -15,11 +15,11 @@ tavily = TavilyClient(api_key=TAVILY_KEY)
 
 st.title("IA KLN 🤖")
 
-# Mémoire de session (Zéro erreur JSON)
+# Mémoire de session (Plus de bug JSON)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Affichage des messages
+# Affichage de l'historique
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -28,16 +28,15 @@ st.divider()
 uploaded_file = st.file_uploader("➕ Ajouter une image", type=["jpg", "png", "jpeg"])
 
 if prompt := st.chat_input("Pose ta question..."):
-    # Ajout du message utilisateur
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     reponse_ia = ""
     with st.chat_message("assistant"):
-        # Recherche web
         context_web = ""
         try:
+            # Recherche web automatique
             search = tavily.search(query=prompt)
             context_web = f"\n\n[Infos Web : {search}]"
         except:
@@ -60,16 +59,16 @@ if prompt := st.chat_input("Pose ta question..."):
                 reponse_ia = res.choices[0].message.content
                 st.markdown(reponse_ia)
             else:
-                # Mode Texte (L'indentation ici est maintenant correcte)
+                # Mode Texte Streaming (C'est ici qu'on gère le 'chunk' proprement)
                 stream = client.chat.completions.create(
                     model="llama-3.3-70b-versatile",
                     messages=[{"role": "system", "content": "Tu es IA KLN. Réponds en français." + context_web}] + st.session_state.messages,
                     stream=True
                 )
+                # Cette ligne extrait le texte du 'chunk' automatiquement
                 reponse_ia = st.write_stream(stream)
         except Exception as e:
             st.error(f"Erreur : {e}")
 
-    # Sauvegarde de la réponse
     if reponse_ia:
         st.session_state.messages.append({"role": "assistant", "content": reponse_ia})
