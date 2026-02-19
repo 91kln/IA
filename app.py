@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Tes Clés
-GROQ_KEY = "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"
+GROQ_KEY = "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"
 TAVILY_KEY = "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"
 
 client = Groq(api_key=GROQ_KEY)
@@ -137,3 +137,4 @@ with col_main:
             messages_actuels.append({"role": "assistant", "content": reponse_ia})
             st.session_state.tous_chats[st.session_state.chat_actuel] = messages_actuels
             sauvegarder_tous_les_chats(st.session_state.tous_chats)
+
